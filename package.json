@@ -1,0 +1,152 @@
+{
+  "name": "baykar-ai-fixer",
+  "displayName": "İvme",
+  "description": "Baykar projelerindeki kod hatalarını LLM kullanarak otomatik düzelten eklenti.",
+  "version": "1.0.0",
+  "publisher": "Baykar",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bakisahin0128/AI.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "icon": "webview-ui/assets/baykar.png",
+  "activationEvents": [
+    "onLanguage:python",
+    "onView:baykar-ai-fixer.chatView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "baykar-ai-fixer.applyFix",
+        "title": "İvme: Düzeltmeyi Uygula"
+      },
+      {
+        "command": "baykar-ai-fixer.modifyWithInput",
+        "title": "İvme ile Değiştir"
+      },
+      {
+        "command": "baykar-ai.showChat",
+        "title": "İvme Sohbetini Göster"
+      },
+      {
+        "command": "baykar-ai.sendToChat",
+        "title": "✈️ İvme'ye Gönder"
+      },
+      {
+        "command": "baykar-ai-fixer.checkVllmStatus",
+        "title": "İvme: Aktif Sunucu Durumunu Kontrol Et"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "baykar-ai-chat-container",
+          "title": "İvme",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "baykar-ai-chat-container": [
+        {
+          "id": "baykar-ai-fixer.chatView",
+          "name": "İvme",
+          "type": "webview",
+          "icon": "webview-ui/baykar-icon.svg"
+        }
+      ]
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "when": "resourceLangId",
+          "command": "baykar-ai.showChat",
+          "group": "navigation",
+          "icon": {
+            "light": "webview-ui/baykar-icon.svg",
+            "dark": "webview-ui/baykar-icon.svg"
+          }
+        }
+      ],
+      "editor/context": [
+        {
+          "when": "editorHasSelection",
+          "command": "baykar-ai.sendToChat",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "baykar-ai.sendToChat",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "editorHasSelection"
+      }
+    ],
+    "configuration": {
+      "title": "İvme Ayarları",
+      "properties": {
+        "baykar-ai-fixer.api.activeService": {
+          "type": "string",
+          "enum": [
+            "vLLM",
+            "Gemini"
+          ],
+          "default": "vLLM",
+          "description": "Kod analizi ve üretimi için kullanılacak yapay zeka servisi."
+        },
+        "baykar-ai-fixer.vllm.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:8000/v1",
+          "description": "Yerel vLLM sunucusunun OpenAI uyumlu adresi."
+        },
+        "baykar-ai-fixer.vllm.modelName": {
+          "type": "string",
+          "default": "Qwen/Qwen1.5-7B-Chat",
+          "description": "vLLM sunucusunda kullanılacak modelin adı."
+        },
+        "baykar-ai-fixer.gemini.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Google Gemini API anahtarınız.",
+          "markdownDescription": "Google AI Studio üzerinden alacağınız API anahtarı. Bu anahtar gizli tutulmalıdır."
+        },
+        "baykar-ai-fixer.chat.conversationHistoryLimit": {
+          "type": "number",
+          "default": 2,
+          "description": "Sohbete gönderilecek önceki mesaj sayısı (bir kullanıcı ve bir asistan mesajı 1 sayılır). Modelin bağlamı hatırlaması için kullanılır."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "18.x",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^7.7.1",
+    "@typescript-eslint/parser": "^7.7.1",
+    "@vscode/test-cli": "^0.0.9",
+    "@vscode/test-electron": "^2.3.9",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.11.3",
+    "axios": "^1.7.2"
+  }
+}
