@@ -1,13 +1,16 @@
 /* ==========================================================================
-   DOSYA 1: src/features/ConversationManager.ts (YENİ DOSYA)
+   DOSYA 1: src/features/ConversationManager.ts
    
-   SORUMLULUK: Tüm konuşma verilerini (oluşturma, kaydetme, yükleme,
-   silme, aktif olanı takip etme) yönetir.
+   SORUMLULUK: Tüm konuşma verilerini yönetir.
+   GÜNCELLEME: Konuşma boyutu hesaplaması, ayarlardaki geçmiş limitini
+               dikkate alacak şekilde güncellendi.
    ========================================================================== */
 
 import * as vscode from 'vscode';
 import { Conversation, ChatMessage } from '../types/index';
 import { generateUUID } from '../core/utils';
+// YENİ: Ayarlara erişim için importlar eklendi
+import { EXTENSION_ID, SETTINGS_KEYS } from '../core/constants';
 
 export class ConversationManager {
     private conversations: Conversation[] = [];
@@ -39,6 +42,32 @@ export class ConversationManager {
             }
         }
         return this.conversations.find(c => c.id === this.activeConversationId);
+    }
+    
+    /**
+     * GÜNCELLENDİ: Artık tüm konuşmayı değil, sadece ayarlardaki limite göre
+     * API'ye gönderilecek olan kısmın boyutunu hesaplar.
+     * @returns {number} API'ye gönderilecek geçmişin karakter sayısı.
+     */
+    public getActiveConversationSize(): number {
+        const activeConv = this.getActive();
+        if (!activeConv) {
+            return 0;
+        }
+
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        // Ayarlardan, sohbete dahil edilecek geçmiş mesaj çifti sayısını al (örneğin: 2)
+        const historyLimit = config.get<number>(SETTINGS_KEYS.conversationHistoryLimit, 2);
+
+        // Sistem mesajı hariç tüm mesajları al
+        const messagesWithoutSystem = activeConv.messages.filter(m => m.role !== 'system');
+        
+        // API'ye gönderilecek olan son mesajları kesitini al.
+        // historyLimit * 2, gönderilecek olan kullanıcı/asistan mesaj çifti sayısını verir.
+        const limitedMessages = messagesWithoutSystem.slice(-(historyLimit * 2));
+
+        // Sadece bu limitli mesajların toplam karakter sayısını döndür.
+        return limitedMessages.reduce((total, message) => total + message.content.length, 0);
     }
 
     public addMessage(role: 'user' | 'assistant', content: string): void {
@@ -85,7 +114,7 @@ export class ConversationManager {
             } else {
                 const newConv = this.createNew();
                 this.activeConversationId = newConv.id;
-                return null; // Yeni ve boş bir konuşma oluşturulduğunu belirtir.
+                return null;
             }
         }
         this.save();
@@ -95,7 +124,7 @@ export class ConversationManager {
     private async save() {
         const conversationsToSave = this.conversations
             .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(0, 50); // Son 50 konuşmayı sakla
+            .slice(0, 50);
         await this.context.workspaceState.update('baykar.conversations', conversationsToSave);
     }
 

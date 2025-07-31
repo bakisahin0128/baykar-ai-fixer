@@ -70,13 +70,21 @@
 
     <div class="input-area">
         <div class="input-wrapper">
-            <button id="attach-file-button" title="Dosya Ekle">
-                <img src="{{attach_icon_uri}}" alt="Dosya Ekle" />
-            </button>
-            <input type="text" id="prompt-input" placeholder="Bir soru sorun veya dosya ekleyin..."/>
-            <button id="send-button" title="Gönder">
-                <img src="{{send_icon_uri}}" alt="Gönder"/>
-            </button>
+            <textarea id="prompt-input" rows="1" placeholder="Bir soru sorun veya dosya ekleyin..."></textarea>
+            
+            <div class="input-actions-bar">
+                <div class="action-group-left">
+                    <button id="attach-file-button" title="Dosya Ekle">
+                        <img src="{{attach_icon_uri}}" alt="Dosya Ekle" />
+                    </button>
+                </div>
+                <div class="action-group-right">
+                    <div id="character-counter" class="character-counter">0 / 10000</div>
+                    <button id="send-button" title="Gönder">
+                        <img src="{{send_icon_uri}}" alt="Gönder"/>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
     

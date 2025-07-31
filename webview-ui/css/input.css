@@ -1,5 +1,5 @@
 /* ==========================================================================
-   INPUT AREA (GİRİŞ ALANI) STİLLERİ
+   INPUT AREA (GİRİŞ ALANI) STİLLERİ - YENİ TASARIM
    ========================================================================== */
 
 #file-context-area {
@@ -44,12 +44,11 @@
 
 .input-wrapper {
     display: flex;
-    align-items: center;
-    gap: 4px;
+    flex-direction: column; /* Üstte textarea, altta actions-bar olacak */
     background-color: var(--vscode-sideBar-background);
     border: 1px solid var(--vscode-widget-border);
     border-radius: 20px;
-    padding: 0 5px 0 8px;
+    padding: 5px 5px 0 15px; /* Alt padding actions-bar'a verildi */
     transition: border-color 0.2s ease;
 }
 
@@ -62,9 +61,44 @@
     background: transparent;
     border: none;
     color: var(--vscode-input-foreground);
-    padding: 10px;
     outline: none;
+    font-family: inherit; /* Ana font ailesini kullan */
     font-size: 14px;
+    padding: 8px 0; /* Dikey boşluk */
+    resize: none; /* Kullanıcının yeniden boyutlandırmasını engelle */
+    line-height: 1.5;
+    max-height: 200px; /* Textarea'nın maksimum büyüme limiti */
+    overflow-y: auto; /* Limite ulaşınca scrollbar çıksın */
+}
+
+#prompt-input::-webkit-scrollbar { width: 4px; }
+#prompt-input::-webkit-scrollbar-thumb { background-color: var(--vscode-scrollbarSlider-background); border-radius: 2px; }
+
+.input-actions-bar {
+    display: flex;
+    justify-content: space-between; /* Sol ve sağ grupları ayır */
+    align-items: center;
+    padding: 4px 0;
+    min-height: 36px; /* Buton yüksekliğine eşitle */
+}
+
+.action-group-left, .action-group-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.character-counter {
+    font-size: 11px;
+    color: var(--vscode-input-placeholderForeground);
+    opacity: 0.7;
+    padding: 0 8px;
+    transition: color 0.2s ease;
+}
+
+.character-counter.limit-exceeded {
+    color: var(--vscode-errorForeground);
+    font-weight: bold;
 }
 
 #attach-file-button, #send-button {

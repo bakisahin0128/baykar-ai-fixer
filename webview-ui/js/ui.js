@@ -1,6 +1,9 @@
 /* ==========================================================================
    ARAYÜZ (UI) YÖNETİM MODÜLÜ (NİHAİ SÜRÜM)
    - Efekt seçimi için ikon butonu yerine toggle switch kullanıldı.
+   - YENİ: Karakter sayacı ve limit kontrolü mantığı eklendi.
+   - DÜZELTME: Limit aşıldığında dosya kaldırma sorunu giderildi.
+   - DÜZELTME: Limit aşıldığında daha fazla yazı yazılması engellendi.
    ========================================================================== */
 
 import * as DOM from './dom.js';
@@ -11,12 +14,16 @@ let isAiResponding = false;
 let isDiffViewActive = false;
 let currentAnimationEffect = localStorage.getItem('animationEffect') || 'diffusion';
 
+// Karakter Sayacı ve Limit için Durum Yönetimi
+const CONTEXT_LIMIT = 10000;
+let conversationSize = 0;
+let filesSize = 0;
+let isLimitExceeded = false;
 
 /**
  * Animasyon efektini değiştirir ve tercihi kaydeder.
  */
 export function toggleAnimationEffect() {
-    // Checkbox'ın mevcut durumuna göre efekti ayarla
     currentAnimationEffect = DOM.effectToggleSwitch.checked ? 'diffusion' : 'streaming';
     localStorage.setItem('animationEffect', currentAnimationEffect);
 }
@@ -34,16 +41,89 @@ function updateEffectToggle() {
  */
 export function initUI() {
     updateEffectToggle();
+    recalculateTotalAndUpdateUI(); 
+}
+
+// ==========================================================================
+// Karakter Sayacı Mantığı
+// ==========================================================================
+
+/**
+ * Eklentiden gelen bağlam boyutlarını (geçmiş, dosyalar) ayarlar ve UI'ı günceller.
+ * @param {number} newConversationSize - Sohbet geçmişinin karakter boyutu.
+ * @param {number} newFilesSize - Ekli dosyaların toplam karakter boyutu.
+ */
+export function setContextSize(newConversationSize, newFilesSize) {
+    conversationSize = newConversationSize;
+    filesSize = newFilesSize;
+    recalculateTotalAndUpdateUI();
 }
 
 /**
- * Gelen yanıtı, seçili animasyon efektine göre işleyerek ekrana yazar.
- * @param {string} responseText - AI'dan gelen tam metin.
+ * Tüm kaynaklardan (giriş, geçmiş, dosyalar) toplam karakter sayısını hesaplar ve UI'ı günceller.
  */
-export function showAiResponse(responseText) {
-    // BU FONKSİYON VE AŞAĞISINDAKİ TÜM KODLAR BİR ÖNCEKİ ADIMDAKİ İLE AYNIDIR.
-    // DEĞİŞİKLİK YAPMANIZA GEREK YOKTUR.
+export function recalculateTotalAndUpdateUI() {
+    const promptSize = DOM.input.value.length;
+    let totalSize = conversationSize + filesSize + promptSize;
+
+    // DÜZELTME: Limiti aşan metni anında kırp.
+    if (totalSize > CONTEXT_LIMIT) {
+        const overage = totalSize - CONTEXT_LIMIT;
+        DOM.input.value = DOM.input.value.slice(0, DOM.input.value.length - overage);
+        // Değer değiştiği için prompt boyutunu yeniden al
+        totalSize = conversationSize + filesSize + DOM.input.value.length;
+    }
+
+    isLimitExceeded = totalSize >= CONTEXT_LIMIT;
+
+    DOM.characterCounter.textContent = `${totalSize} / ${CONTEXT_LIMIT}`;
+    DOM.characterCounter.classList.toggle('limit-exceeded', isLimitExceeded);
     
+    updateInputAndButtonState();
+}
+
+/**
+ * Limitin aşılıp aşılmadığına göre giriş elemanlarının durumunu ayarlar.
+ */
+function updateInputAndButtonState() {
+    const isUiBlocked = isAiResponding || isDiffViewActive;
+
+    // Kullanıcıya metni silme şansı vermek için input'u sadece AI meşgulken kilitliyoruz.
+    // Yazma engellemesi yukarıdaki `recalculateTotalAndUpdateUI` fonksiyonunda yapılıyor.
+    DOM.input.disabled = isUiBlocked;
+
+    const canSend = !isUiBlocked && DOM.input.value.trim().length > 0 && !isLimitExceeded;
+    DOM.sendButton.disabled = !canSend;
+    DOM.sendButton.style.opacity = canSend ? '1' : '0.5';
+    DOM.sendButton.style.cursor = canSend ? 'pointer' : 'not-allowed';
+
+    const canAttach = !isUiBlocked && !isLimitExceeded;
+    DOM.attachFileButton.disabled = !canAttach;
+    DOM.attachFileButton.style.opacity = canAttach ? '1' : '0.5';
+    DOM.attachFileButton.style.cursor = canAttach ? 'pointer' : 'not-allowed';
+
+    if (isUiBlocked) {
+        if (isAiResponding) {
+            DOM.input.placeholder = 'İvme yanıtlıyor, lütfen bekleyin...';
+        } else if (isDiffViewActive) {
+            DOM.input.placeholder = 'Lütfen önerilen değişikliği onaylayın veya reddedin.';
+        }
+    } else if (isLimitExceeded) {
+        DOM.input.placeholder = 'Karakter limitine ulaşıldı. Devam etmek için metin silin.';
+    } else {
+        const fileTags = DOM.fileContextArea.querySelectorAll('.file-tag');
+        DOM.input.placeholder = fileTags.length > 0
+            ? `${fileTags.length} dosya hakkında bir talimat girin...`
+            : 'Bir soru sorun veya dosya ekleyin...';
+    }
+}
+
+
+// ==========================================================================
+// Mevcut Fonksiyonların Güncellenmesi (Bu bölümde değişiklik yok)
+// ==========================================================================
+
+export function showAiResponse(responseText) {
     const loadingElement = document.getElementById('ai-loading-placeholder');
     if (!loadingElement) return;
 
@@ -77,7 +157,7 @@ export function showAiResponse(responseText) {
                 hljs.highlightElement(code);
                 addCopyButtonsToCodeBlocks(contentElement);
 
-            } else { // Metin Paragrafları
+            } else { 
                 const paragraphs = chunk.split(/\n{2,}/g).filter(p => p.trim() !== '');
                 for(const paraText of paragraphs) {
                     const paraElement = document.createElement('p');
@@ -91,16 +171,13 @@ export function showAiResponse(responseText) {
             }
             DOM.chatContainer.scrollTop = DOM.chatContainer.scrollHeight;
         }
-        setInputEnabled(true);
+        isAiResponding = false;
+        recalculateTotalAndUpdateUI();
+        DOM.input.focus();
     }
     processChunks();
 }
 
-// --- ANİMASYON MOTORLARI ---
-
-/**
- * Metin paragrafları için "diffusion" efekti çalıştırır.
- */
 function runTextDiffusionEffect(element, originalText) {
     return new Promise(resolve => {
         let step = 0;
@@ -124,9 +201,6 @@ function runTextDiffusionEffect(element, originalText) {
     });
 }
 
-/**
- * Kod blokları için satır satır "diffusion" efekti çalıştırır.
- */
 async function runCodeDiffusionEffect(codeElement, rawCode) {
     const lines = rawCode.split('\n');
     for (const line of lines) {
@@ -134,13 +208,9 @@ async function runCodeDiffusionEffect(codeElement, rawCode) {
         codeElement.appendChild(lineDiv);
         await runDiffusionEffectForLine(lineDiv, line);
     }
-    // Animasyon sonrası highlight.js'in bozulmasını engellemek için temizle ve yeniden yaz.
     codeElement.textContent = rawCode;
 }
 
-/**
- * Tek bir kod satırı için "diffusion" efektini yönetir.
- */
 function runDiffusionEffectForLine(element, originalLine) {
     return new Promise(resolve => {
         let step = 0;
@@ -163,9 +233,6 @@ function runDiffusionEffectForLine(element, originalLine) {
     });
 }
 
-/**
- * Hem metin hem de kod için "yazılıyor" (streaming) efekti çalıştırır.
- */
 function runStreamingEffect(element, originalText, isCode) {
     return new Promise(resolve => {
         let i = 0;
@@ -187,37 +254,11 @@ function runStreamingEffect(element, originalText, isCode) {
     });
 }
 
-
-// --- DİĞER STANDART FONKSİYONLAR (DEĞİŞİKLİK YOK) ---
-
 export const getAiRespondingState = () => isAiResponding || isDiffViewActive;
 
 export function setInputEnabled(enabled) {
-    const isActuallyEnabled = enabled && !isDiffViewActive;
     isAiResponding = !enabled;
-
-    DOM.input.disabled = !isActuallyEnabled;
-    DOM.sendButton.disabled = !isActuallyEnabled;
-
-    if (isActuallyEnabled) {
-        const fileTags = DOM.fileContextArea.querySelectorAll('.file-tag');
-        if (fileTags.length > 0) {
-            DOM.input.placeholder = `${fileTags.length} dosya hakkında bir talimat girin...`;
-        } else {
-            DOM.input.placeholder = 'Bir soru sorun veya dosya ekleyin...';
-        }
-        DOM.sendButton.style.opacity = '1';
-        DOM.sendButton.style.cursor = 'pointer';
-        DOM.input.focus();
-    } else if (isDiffViewActive) {
-        DOM.input.placeholder = 'Lütfen önerilen değişikliği onaylayın veya reddedin.';
-        DOM.sendButton.style.opacity = '0.5';
-        DOM.sendButton.style.cursor = 'not-allowed';
-    } else {
-        DOM.input.placeholder = 'İvme yanıtlıyor, lütfen bekleyin...';
-        DOM.sendButton.style.opacity = '0.5';
-        DOM.sendButton.style.cursor = 'not-allowed';
-    }
+    recalculateTotalAndUpdateUI();
 }
 
 function addCopyButtonsToCodeBlocks(element) {
@@ -274,6 +315,8 @@ export function addUserMessage(text) {
     const p = document.createElement('p');
     p.textContent = text;
     createMessageElement('user', p.outerHTML);
+    conversationSize += text.length; 
+    recalculateTotalAndUpdateUI();
     showAiLoadingIndicator();
 }
 
@@ -302,26 +345,33 @@ export function displayFileTags(fileNames) {
         removeButton.title = 'Dosyayı Kaldır';
         removeButton.dataset.fileName = fileName;
         removeButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="16" height="16"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06z"></path></svg>`;
+        
         removeButton.addEventListener('click', (event) => {
-            if(getAiRespondingState()) return;
+            if (isAiResponding || isDiffViewActive) return;
             const fileToRemove = event.currentTarget.dataset.fileName;
             postMessage('removeFileContext', { fileName: fileToRemove });
         });
+        
         tagElement.appendChild(removeButton);
         DOM.fileContextArea.appendChild(tagElement);
     });
-    DOM.input.placeholder = `${fileNames.length} dosya hakkında bir talimat girin...`;
+    recalculateTotalAndUpdateUI();
 }
 
 export function clearFileTag() {
     DOM.fileContextArea.innerHTML = '';
-    DOM.input.placeholder = 'Bir soru sorun veya dosya ekleyin...';
+    filesSize = 0;
+    recalculateTotalAndUpdateUI();
 }
 
 export function clearChat() {
     DOM.chatContainer.innerHTML = '';
     DOM.chatContainer.classList.add('hidden');
     DOM.welcomeContainer.classList.remove('hidden');
+    conversationSize = 0;
+    filesSize = 0;
+    DOM.input.value = '';
+    recalculateTotalAndUpdateUI();
     hideDiffView();
 }
 
@@ -332,10 +382,15 @@ export function loadConversation(messages) {
     if (conversationMessages.length > 0) {
         DOM.welcomeContainer.classList.add('hidden');
         DOM.chatContainer.classList.remove('hidden');
+        let newConversationSize = 0;
         conversationMessages.forEach(msg => {
             const content = (msg.role === 'assistant') ? marked.parse(msg.content) : `<p>${msg.content}</p>`;
             createMessageElement(msg.role, content);
+            newConversationSize += msg.content.length;
         });
+        setContextSize(newConversationSize, filesSize);
+    } else {
+        setContextSize(0, filesSize);
     }
 }
 
@@ -367,12 +422,12 @@ export function showDiffView(diffData) {
 
     DOM.diffContainer.classList.remove('hidden');
     isDiffViewActive = true;
-    setInputEnabled(false);
+    recalculateTotalAndUpdateUI();
 }
 
 export function hideDiffView() {
     DOM.diffContainer.classList.add('hidden');
     DOM.unifiedDiffCodeBlock.innerHTML = '';
     isDiffViewActive = false;
-    setInputEnabled(true);
+    recalculateTotalAndUpdateUI();
 }

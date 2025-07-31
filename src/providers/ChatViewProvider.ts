@@ -1,10 +1,9 @@
 /* ==========================================================================
-   DOSYA 6: src/providers/ChatViewProvider.ts (YENİDEN DÜZENLENMİŞ ANA DOSYA)
+   DOSYA 6: src/providers/ChatViewProvider.ts
    
-   SORUMLULUK: Artık sadece bir orkestra şefi gibi davranır. Webview'i
-   oluşturur, yöneticileri (manager) başlatır ve gelen mesajları ilgili
-   yöneticiye yönlendirir.
-   YENİ: 'approveChange' mesajını işler ve 'showDiff'i delege eder.
+   SORUMULULUK: Webview'i oluşturur, yöneticileri (manager) başlatır ve 
+   gelen mesajları ilgili yöneticiye yönlendirir.
+   GÜNCELLEME: Artık yeni dosya ekleme fonksiyonu çağrılıyor.
    ========================================================================== */
 
 import * as vscode from 'vscode';
@@ -22,7 +21,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = `${EXTENSION_ID}.chatView`;
     private _view?: vscode.WebviewView;
 
-    // Yönetici sınıflarını başlatıyoruz
     private readonly conversationManager: ConversationManager;
     private readonly messageHandler: MessageHandler;
     private readonly contextManager: ContextManager;
@@ -38,6 +36,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.settingsManager = new SettingsManager();
     }
 
+    private sendContextSizeToWebview() {
+        if (!this._view) return;
+
+        const conversationSize = this.conversationManager.getActiveConversationSize();
+        const filesSize = this.contextManager.getUploadedFilesSize();
+        
+        this._view.webview.postMessage({
+            type: 'updateContextSize',
+            payload: {
+                conversationSize,
+                filesSize
+            }
+        });
+    }
+
     public resolveWebviewView(webviewView: vscode.WebviewView) {
         this._view = webviewView;
         webviewView.webview.options = {
@@ -46,11 +59,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         };
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        // Gelen mesajları ilgili yöneticilere delege et
+        this.sendContextSizeToWebview();
+
         webviewView.webview.onDidReceiveMessage(async data => {
             if (!this._view) return;
 
             switch (data.type) {
+                case 'requestContextSize': {
+                    this.sendContextSizeToWebview();
+                    break;
+                }
+
                 case 'askAI': {
                     const userMessage = data.payload;
                     if (this.contextManager.uploadedFileContexts.length > 0) {
@@ -61,12 +80,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     } else {
                         await this.messageHandler.handleStandardChat(userMessage, this._view.webview);
                     }
+                    this.sendContextSizeToWebview();
                     break;
                 }
                 
-                // YENİ: Kullanıcının değişikliği onayladığı mesajı işle.
                 case 'approveChange': {
                     await this.messageHandler.handleApproveChange(data.payload, this._view.webview);
+                    this.sendContextSizeToWebview();
                     break;
                 }
 
@@ -78,6 +98,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
                     this.conversationManager.createNew();
                     this._view.webview.postMessage({ type: 'clearChat' });
+                    this.sendContextSizeToWebview();
                     break;
                 }
 
@@ -92,6 +113,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     if (conversation) {
                         this._view.webview.postMessage({ type: 'loadConversation', payload: conversation.messages });
                     }
+                    this.sendContextSizeToWebview();
                     break;
                 }
 
@@ -104,19 +126,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     }
                     const historySummary = this.conversationManager.getHistorySummary();
                     this._view.webview.postMessage({ type: 'loadHistory', payload: historySummary });
+                    this.sendContextSizeToWebview();
                     break;
                 }
                 
+                // GÜNCELLENDİ: Artık yeni fonksiyonu çağırıyor.
                 case 'requestFileUpload': 
-                    await this.contextManager.setFileContext(this._view.webview); 
+                    await this.contextManager.addFilesToContext(this._view.webview); 
+                    this.sendContextSizeToWebview();
                     break;
                 
                 case 'removeFileContext': 
                     this.contextManager.removeFileContext(data.payload.fileName, this._view.webview);
+                    this.sendContextSizeToWebview();
                     break;
                 
                 case 'clearFileContext':
-                    this.contextManager.clearAll(this._view.webview); 
+                    this.contextManager.clearAll(this._view.webview);
+                    this.sendContextSizeToWebview();
                     break;
                 
                 case 'requestConfig': 
@@ -135,6 +162,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 if (activeConv) {
                     this._view?.webview.postMessage({ type: 'loadConversation', payload: activeConv.messages });
                 }
+                this.sendContextSizeToWebview();
             }
         });
     }

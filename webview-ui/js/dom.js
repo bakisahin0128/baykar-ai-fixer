@@ -50,3 +50,6 @@ export const closeDiffButton = document.getElementById('close-diff-button');
 // --- İkon URI'ları ---
 export const AI_ICON_URI = chatContainer.dataset.aiIconUri;
 export const USER_ICON_URI = chatContainer.dataset.userIconUri;
+
+// --- YENİ: Karakter Sayacı ---
+export const characterCounter = document.getElementById('character-counter');
