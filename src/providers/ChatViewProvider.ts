@@ -72,20 +72,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
                 case 'askAI': {
                     const userMessage = data.payload;
-                    if (this.contextManager.uploadedFileContexts.length > 0) {
-                        await this.messageHandler.handleFileContextInteraction(userMessage, this.contextManager.uploadedFileContexts, this._view.webview);
-                    } else if (this.contextManager.activeContextText && this.contextManager.activeEditorUri && this.contextManager.activeSelection) {
-                        await this.messageHandler.handleContextualModification(userMessage, this.contextManager.activeContextText, this.contextManager.activeEditorUri, this.contextManager.activeSelection, this._view.webview);
+                    const hasFileContext = this.contextManager.uploadedFileContexts.length > 0;
+                    const hasSelectionContext = !!this.contextManager.activeContextText;
+
+                    if (hasFileContext) {
+                        await this.messageHandler.handleContextualChat(userMessage, this.contextManager.uploadedFileContexts, this._view.webview);
+                        // Etkileşimden sonra dosya bağlamını temizlemek istenebilir, şimdilik tutuyoruz.
+                    } else if (hasSelectionContext && this.contextManager.activeEditorUri) {
+                        const selectionContext = [{
+                            uri: this.contextManager.activeEditorUri,
+                            content: this.contextManager.activeContextText!,
+                            fileName: 'Seçili Kod' // Arayüzde göstermek için
+                        }];
+                        await this.messageHandler.handleContextualChat(userMessage, selectionContext, this._view.webview);
+                        // Seçimle işimiz bittiği için bağlamı temizliyoruz.
                         this.contextManager.clearAll(this._view.webview);
                     } else {
                         await this.messageHandler.handleStandardChat(userMessage, this._view.webview);
                     }
-                    this.sendContextSizeToWebview();
-                    break;
-                }
-                
-                case 'approveChange': {
-                    await this.messageHandler.handleApproveChange(data.payload, this._view.webview);
                     this.sendContextSizeToWebview();
                     break;
                 }

@@ -1,6 +1,7 @@
 /**
  * LLM'e, verilen bir kod parçasını (veya dosyanın tamamını) bir talimata göre
  * değiştirmesini ve SADECE değiştirilmiş kodu döndürmesini söyler.
+ * (Bu fonksiyon, Hızlı Düzeltme gibi özellikler için hala gerekli olabilir.)
  */
 export function createModificationPrompt(instruction: string, codeToModify: string): string {
     return `Sen bir uzman yazılım geliştirme asistanısın. Aşağıdaki "DEĞİŞTİRİLECEK KOD"u, verilen "TALİMAT"a göre değiştir.
@@ -17,112 +18,21 @@ ${codeToModify}
 }
 
 /**
- * LLM'e, bir kodun orijinal ve değiştirilmiş halini vererek, bu iki versiyon
- * arasındaki farkları AÇIKÇA VE GEREKSİZ GİRİŞ CÜMLELERİ OLMADAN açıklamasını ister.
+ * YENİ: Standart sohbet ve bağlam içeren sohbetler için genel bir prompt.
+ * Modelden, kullanıcının niyetine göre ya bir açıklama yapmasını ya da
+ * bir kod önerisinde bulunmasını ister. Yanıt formatı serbest bırakılmıştır (Markdown).
  */
-export function createExplanationPrompt(originalCode: string, modifiedCode: string): string {
-    return `Sen bir uzman yazılım geliştirme asistanısın. Aşağıda bir kodun "ÖNCEKİ HALİ" ile "YENİ HALİ" verilmiştir.
+export function createGeneralChatPrompt(instruction: string, contexts?: Array<{ fileName?: string, content: string }>): string {
+    const contextString = contexts && contexts.length > 0
+        ? 'Aşağıdaki kod bağlamını dikkate alarak yanıt ver:\n\n' + contexts.map(c => `--- BAĞLAM: ${c.fileName || 'Seçili Kod'} ---\n${c.content}\n---`).join('\n\n')
+        : '';
 
-GÖREVİN: Yapılan değişiklikleri, doğrudan madde madde Markdown formatında listelemektir. Herhangi bir giriş veya sonuç cümlesi KURMA. Sadece değişiklikleri listele.
+    return `Sen Baykar bünyesinde çalışan, uzman bir yazılım geliştirme asistanısın.
+Kullanıcının talimatını analiz et ve yanıtını Markdown formatında, okunabilirliği artırmak için listeler, kalın metinler ve kod parçacıkları gibi zengin formatlar kullanarak oluştur.
 
-ÖRNEK ÇIKTI FORMATI:
-* \`degisken_adi\` güncellenerek daha anlaşılır hale getirildi.
-* Gereksiz döngü kaldırılarak performans iyileştirmesi yapıldı.
-* Hata yakalama için \`try-except\` bloğu eklendi.
+${contextString}
 
-ÖNCEKİ HALİ:
----
-${originalCode}
----
-
-YENİ HALİ:
----
-${modifiedCode}
----
-
-Şimdi, bu iki versiyon arasındaki değişiklikleri yukarıdaki örnek formata birebir uyarak, GİRİŞ CÜMLEMESİ OLMADAN açıkla.
-`;
-}
-
-/**
- * Dosya bazlı etkileşimler için niyet analizi yapar.
- */
-export function createFileInteractionAnalysisPrompt(files: Array<{ fileName:string, content:string }>, instruction: string): string {
-    const fileContents = files.map(file => `
---- DOSYA ADI: "${file.fileName}" ---
-${file.content}
----
-`).join('\n\n');
-
-    return `
-Sen, birincil görevi kullanıcının talebini yerine getirmek olan bir yazılım asistanısın.
-
-GÖREVİN:
-Kullanıcının talimatını ve verilen dosya(lar)ı analiz ederek aşağıdaki iki niyetten birini seç ve cevabını MUTLAKA JSON formatında oluştur:
-
-1.  **Niyet: "answer"**
-    - **Koşul:** Eğer kullanıcı bir soru soruyor, açıklama istiyor, hata bulmasını istiyor veya kod hakkında bir fikir talep ediyorsa bu niyeti seç.
-    - **JSON Çıktısı:**
-      {
-        "intent": "answer",
-        "explanation": "[KULLANICININ SORUSUNA DOĞRUDAN VE TAM CEVAP BURAYA GELECEK. Cevabını Markdown formatında, GEREKTİĞİNDE maddeler ve kod blokları kullanarak detaylı bir şekilde oluştur.]"
-      }
-
-2.  **Niyet: "modify"**
-    - **Koşul:** Eğer kullanıcı AÇIKÇA kodun değiştirilmesini, yeniden yazılmasını, bir şey eklenmesini/silinmesini veya refactor edilmesini istiyorsa bu niyeti seç.
-    - **JSON Çıktısı:**
-      {
-        "intent": "modify",
-        "fileName": "[DEĞİŞTİRİLECEK TEK BİR DOSYANIN ADI]",
-        "explanation": "[YAPILACAK DEĞİŞİKLİĞİ TEK CÜMLEDE ÖZETLE]"
-      }
-
-SAKIN UNUTMA:
-- Cevabın SADECE ve SADECE JSON içermelidir. Başka hiçbir metin ekleme.
-- Eğer birden fazla dosya varsa ve kullanıcı bir değişiklik istiyorsa, talimata en uygun TEK bir dosyayı seç.
-
-KULLANICI TALİMATI: "${instruction}"
-
-DOSYA(LAR):
-${fileContents}
-`;
-}
-
-/**
- * Seçili kod bazlı etkileşimler için niyet analizi yapar.
- */
-export function createSelectionInteractionAnalysisPrompt(selectedCode: string, instruction: string): string {
-    return `
-Sen, birincil görevi kullanıcının talebini yerine getirmek olan bir yazılım asistanısın.
-
-GÖREVİN:
-Kullanıcının talimatını ve verilen seçili kodu analiz ederek aşağıdaki iki niyetten birini seç ve cevabını MUTLAKA JSON formatında oluştur:
-
-1.  **Niyet: "answer"**
-    - **Koşul:** Eğer kullanıcı seçili kod hakkında bir soru soruyor, açıklama istiyor veya hata bulmasını istiyorsa bu niyeti seç.
-    - **JSON Çıktısı:**
-      {
-        "intent": "answer",
-        "explanation": "[SEÇİLİ KOD HAKKINDAKİ SORUYA DOĞRUDAN VE TAM CEVAP BURAYA GELECEK. Cevabını Markdown formatında, GEREKTİĞİNDE maddeler ve kod blokları kullanarak detaylı bir şekilde oluştur.]"
-      }
-
-2.  **Niyet: "modify"**
-    - **Koşul:** Eğer kullanıcı AÇIKÇA seçili kodun değiştirilmesini, yeniden yazılmasını veya refactor edilmesini istiyorsa bu niyeti seç.
-    - **JSON Çıktısı:**
-      {
-        "intent": "modify",
-        "explanation": "[YAPILACAK DEĞİŞİKLİĞİ TEK CÜMLEDE ÖZETLE]"
-      }
-
-SAKIN UNUTMA:
-- Cevabın SADECE ve SADECE JSON içermelidir. Başka hiçbir metin ekleme.
-
-KULLANICI TALİMATI: "${instruction}"
-
-SEÇİLİ KOD:
----
-${selectedCode}
----
+Kullanıcı Talimatı: "${instruction}"
 `;
 }
 
